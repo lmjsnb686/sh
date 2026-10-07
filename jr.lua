@@ -29,12 +29,12 @@ local function h(s)
     return table.concat(t)
 end
 
-local K_HMG   = h("6861636b696e674d696e6967616d65")              -- hackingMinigame
-local K_SMG   = h("73746172744d696e6967616d65")                  -- startMinigame
-local K_DH    = h("64697361626c654861636b696e67")                -- disableHacking
-local K_DM    = h("64697361626c654d696e6967616d6573")            -- disableMinigames
-local K_BM    = h("426c61636b204d61726b6574")                    -- Black Market
-local K_PUR   = h("7075726368617365")                            -- purchase
+local K_HMG   = h("6861636b696e674d696e6967616d65")
+local K_SMG   = h("73746172744d696e6967616d65")
+local K_DH    = h("64697361626c654861636b696e67")
+local K_DM    = h("64697361626c654d696e6967616d6573")
+local K_BM    = h("426c61636b204d61726b6574")
+local K_PUR   = h("7075726368617365")
 
 local K_RULES = "GameRules"
 local K_FW    = "Framework"
@@ -54,13 +54,6 @@ local CrimeESPEnabled = false
 local ESPEnabled = false
 local AutoToolEnabled = false
 local Unloaded = false
-
--- ★ 无限车辆耐久 / 自动捡钱
-local InfVehicleHPEnabled = false
-local AutoPickupEnabled = false
-local autoPickupRange = 30
-local autoPickupInterval = 0.15
-local autoPickupLast = 0
 
 -- 抓取状态
 local GrabEnabled = false
@@ -171,218 +164,6 @@ end
 -- ============================================================
 local RemoteFolder = ReplicatedStorage:WaitForChild(K_REM, 30)
 local PlayerFunc  = RemoteFolder and RemoteFolder:WaitForChild(K_PFUNC, 30)
-
--- ============================================================
--- ★ 无限车辆耐久
--- ============================================================
-local VehicleHP_KEYS = {
-    "Durability",
-    "Health",
-    "VehicleHealth",
-    "HP",
-    "Condition",
-}
-
-local function getCurrentVehicleModel()
-    local char = LocalPlayer.Character
-    if not char then return nil end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return nil end
-
-    local seat = hum.SeatPart
-    if seat then
-        local v = seat
-        while v and v ~= Workspace do
-            if v:FindFirstChild("_Chassis") or v:FindFirstChild("Config") then
-                return v
-            end
-            v = v.Parent
-        end
-    end
-
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        local ar = hrp.AssemblyRootPart
-        if ar and ar ~= hrp then
-            local v = ar
-            while v and v ~= Workspace do
-                if v:FindFirstChild("_Chassis") or v:FindFirstChild("Config") then
-                    return v
-                end
-                v = v.Parent
-            end
-        end
-    end
-
-    return nil
-end
-
-table.insert(Connections, RunService.Heartbeat:Connect(function()
-    if not InfVehicleHPEnabled or Unloaded then return end
-
-    local model = getCurrentVehicleModel()
-    if not model then return end
-
-    pcall(function()
-        for _, k in ipairs(VehicleHP_KEYS) do
-            local attr = model:GetAttribute(k)
-            if attr ~= nil then
-                model:SetAttribute(k, 1000000)
-            end
-        end
-    end)
-
-    for _, d in ipairs(model:GetDescendants()) do
-        pcall(function()
-            for _, k in ipairs(VehicleHP_KEYS) do
-                local attr = d:GetAttribute(k)
-                if attr ~= nil then
-                    d:SetAttribute(k, 1000000)
-                end
-            end
-
-            if d:IsA("NumberValue") or d:IsA("IntValue") then
-                local n = d.Name:lower()
-                if n:find("durab")
-                or n:find("health")
-                or n == "hp"
-                or n:find("vehiclehp")
-                or n:find("condition") then
-                    d.Value = 1000000
-                end
-            end
-        end)
-    end
-end))
-
--- ============================================================
--- ★ 自动捡钱
--- ============================================================
-local function isPickupCandidate(inst)
-    if not inst then return false end
-    if inst:IsA("Tool") then
-        local n = inst.Name:lower()
-        if n:find("cash")
-        or n:find("money")
-        or n:find("dollar")
-        or n:find("coin")
-        or n:find("bill") then
-            return true
-        end
-    elseif inst:IsA("Model") or inst:IsA("BasePart") then
-        local n = inst.Name:lower()
-        if n:find("cash")
-        or n:find("money")
-        or n:find("dollar")
-        or n:find("coin")
-        or n:find("bill")
-        or n:find("drop") then
-            return true
-        end
-    end
-    return false
-end
-
-local function getTargetRoot()
-    local char = LocalPlayer.Character
-    if not char then return nil end
-    return char:FindFirstChild("HumanoidRootPart")
-        or char:FindFirstChild("UpperTorso")
-        or char:FindFirstChild("Torso")
-end
-
-local function tryPickupItem(inst, myRoot)
-    local prompt = inst:FindFirstChildOfClass("ProximityPrompt")
-    if not prompt then
-        local d = inst
-        while d and d ~= Workspace do
-            local p = d:FindFirstChildOfClass("ProximityPrompt")
-            if p then prompt = p; break end
-            d = d.Parent
-        end
-    end
-
-    if prompt then
-        pcall(function()
-            if fireproximityprompt then
-                fireproximityprompt(prompt)
-            else
-                prompt:InputHoldBegin()
-                task.wait(0.05)
-                prompt:InputHoldEnd()
-            end
-        end)
-        return true
-    end
-
-    local base = inst:IsA("BasePart") and inst
-        or inst:FindFirstChildWhichIsA("BasePart")
-    if base and myRoot then
-        pcall(function()
-            myRoot.CFrame = CFrame.new(base.Position + Vector3.new(0, 2, 0))
-        end)
-        return true
-    end
-
-    if inst:IsA("Tool") and inst.Parent ~= LocalPlayer.Character then
-        pcall(function()
-            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum:EquipTool(inst)
-            end
-        end)
-        return true
-    end
-
-    return false
-end
-
-table.insert(Connections, RunService.Heartbeat:Connect(function()
-    if not AutoPickupEnabled or Unloaded then return end
-
-    local now = tick()
-    if now - autoPickupLast < autoPickupInterval then return end
-
-    local myRoot = getTargetRoot()
-    if not myRoot then return end
-
-    local folders = {
-        Workspace:FindFirstChild("Gameplay"),
-        Workspace:FindFirstChild("Items"),
-        Workspace:FindFirstChild("Drops"),
-        Workspace:FindFirstChild("Debris"),
-        Workspace,
-    }
-
-    for _, container in ipairs(folders) do
-        if not container then continue end
-        local children = container:GetChildren()
-        for _, inst in ipairs(children) do
-            if isPickupCandidate(inst) then
-                local pos
-                if inst:IsA("BasePart") then
-                    pos = inst.Position
-                elseif inst:IsA("Model") then
-                    local p = inst.PrimaryPart or inst:FindFirstChildWhichIsA("BasePart")
-                    if p then pos = p.Position end
-                elseif inst:IsA("Tool") then
-                    local h = inst:FindFirstChild("Handle")
-                    if h then pos = h.Position end
-                end
-
-                if pos then
-                    local dist = (pos - myRoot.Position).Magnitude
-                    if dist <= autoPickupRange then
-                        if tryPickupItem(inst, myRoot) then
-                            autoPickupLast = now
-                            return
-                        end
-                    end
-                end
-            end
-        end
-    end
-end))
 
 -- ============================================================
 -- 抓取核心
@@ -1104,28 +885,6 @@ MoneyTab:Toggle({
     Callback = function(v) setAutoTool(v) end,
 })
 
--- ★ 新功能
-MoneyTab:Toggle({
-    Title = "无限车辆耐久",
-    Desc = "当前开的车耐久永远满",
-    Default = false,
-    Callback = function(v) InfVehicleHPEnabled = v end,
-})
-
-MoneyTab:Toggle({
-    Title = "自动捡钱",
-    Desc = "自动靠近并捡起附近的现金",
-    Default = false,
-    Callback = function(v) AutoPickupEnabled = v end,
-})
-
-MoneyTab:Slider({
-    Title = "捡钱范围",
-    Value = { Min = 5, Max = 120, Default = 30 },
-    Step = 5,
-    Callback = function(v) autoPickupRange = v end,
-})
-
 -- 远程购买 UI
 local purchaseItems = getMarketItems()
 local purchaseNames = {}
@@ -1316,8 +1075,6 @@ local function unload()
     Unloaded = true
 
     if AutoToolEnabled then setAutoTool(false) end
-    InfVehicleHPEnabled = false
-    AutoPickupEnabled = false
     grabSetEnabled(false)
 
     if grabWindow then
@@ -1364,10 +1121,6 @@ table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gp
         ESPEnabled = not ESPEnabled
     elseif input.KeyCode == Enum.KeyCode.F4 then
         unload()
-    elseif input.KeyCode == Enum.KeyCode.F5 then
-        InfVehicleHPEnabled = not InfVehicleHPEnabled
-    elseif input.KeyCode == Enum.KeyCode.F6 then
-        AutoPickupEnabled = not AutoPickupEnabled
     elseif input.KeyCode == Enum.KeyCode.F12 then
         grabSetEnabled(not GrabEnabled)
         if GrabEnabled then
